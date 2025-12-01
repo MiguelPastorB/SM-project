@@ -5,7 +5,7 @@ Este repositorio contiene un **Pipeline de Machine Learning Automatizado (AutoML
 
 El proyecto utiliza el framework **Agno** y el modelo **Google Gemini 2.5 Flash** para orquestar un equipo de agentes de IA que analizan, limpian, procesan y modelan datos sin intervención humana.
 
-> **Nota:** Este es un **proyecto personal** desarrollado con fines educativos para explorar el potencial de los Agentes de IA en flujos de trabajo de Data Science. No pretende ser una herramienta de producción , sino una prueba de concepto sobre orquestación lógica.
+> **Nota:** Este es un **proyecto personal** desarrollado con fines educativos para explorar el potencial de los Agentes de IA en flujos de trabajo de Data Science. No pretende ser una herramienta de producción, sino una prueba de concepto sobre orquestación lógica.
 
 ## Estructura
 
@@ -32,6 +32,8 @@ El sistema despliega una cadena de agentes especializados que se comunican entre
 
 ## Gestión de archivos csv
 
+El Sistema Multiagente ha sido probado principalmente con el archivo "Bullying1.csv" que aparece en "data/raw/Bullying1.csv". Si se quiere probar con otro dataset, simplemente hay que subir un nuevo .csv en la carpeta "data/raw" y cambiar la variable archivo_objetivo en main.py.
+
 Durante el proceso de AutoML, el Sistema Multiagente creará diferentes .csv con los diferentes preprocesamientos aplicados y todos almacenados en una carpeta "data/processed_data".
 
 Al final del preprocesamiento, guardaremos la última copia del csv. procesado previa a la aplicación de balanceo de datos y modelado en "data/clean_data".
@@ -39,11 +41,11 @@ Al final del preprocesamiento, guardaremos la última copia del csv. procesado p
 Todo con el objetivo de comprobar el avance de nuestro Sistema Multiagente. Para evitar posibles errores al volver a ejecutar "python main.py" el sistema buscará estas dos carpetas, 
 las borrará junto a todo su contenido y volverá a crearlas vacías.
 
-## 📋 Requisitos Previos
+## Requisitos Previos
 
-Toda la instalación requerida para ejecutar este sistema multiagente se encuentra en requirements.txt.
+Toda la instalación previa requerida para ejecutar este sistema multiagente se encuentra en requirements.txt.
 
-## 🛠️ Instalación
+## Instalación
 
 1.  **Clonar el repositorio:**
     ```bash
@@ -61,9 +63,9 @@ Toda la instalación requerida para ejecutar este sistema multiagente se encuent
     GOOGLE_API_KEY=tu_clave_secreta_aqui
     ```
 
-## ▶️ Ejecución y Uso
+## Ejecución y Uso
 
-Para iniciar el sistema multi-agente, ejecuta el orquestador principal:
+Para iniciar el sistema multiagente, ejecuta:
 
 ```bash
 python main.py
