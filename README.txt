@@ -29,6 +29,16 @@ El sistema despliega una cadena de agentes especializados que se comunican entre
 5.  **Encoding Agent:** Transforma variables categóricas a numéricas.
 6.  **Modeling Agent:** Normaliza los datos. Entrena un modelo **Random Forest**, aplica balanceo SMOTE si es necesario y evalúa métricas (Accuracy, F1, ROC-AUC, Matriz de Confusión).
 
+
+## Gestión de archivos csv
+
+Durante el proceso de AutoML, el Sistema Multiagente creará diferentes .csv con los diferentes preprocesamientos aplicados y todos almacenados en una carpeta "data/processed_data".
+
+Al final del preprocesamiento, guardaremos la última copia del csv. procesado previa a la aplicación de balanceo de datos y modelado en "data/clean_data".
+
+Todo con el objetivo de comprobar el avance de nuestro Sistema Multiagente. Para evitar posibles errores al volver a ejecutar "python main.py" el sistema buscará estas dos carpetas, 
+las borrará junto a todo su contenido y volverá a crearlas vacías.
+
 ## 📋 Requisitos Previos
 
 Toda la instalación requerida para ejecutar este sistema multiagente se encuentra en requirements.txt.
