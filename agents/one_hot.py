@@ -14,23 +14,36 @@ load_dotenv()
 @tool
 def aplicar_dummies(filepath: str) -> str:
 
-    df = pd.read_csv(filepath)
+    try:
+        df = pd.read_csv(filepath)
+    except FileNotFoundError:
+        return f"Error: El archivo '{filepath}' no fue encontrado."
+    except pd.errors.EmptyDataError:
+        return f"Error: El archivo '{filepath}' está vacío."
+    except Exception as e:
+        return f"Error leyendo el archivo: {e}"
     
     # Identificar columnas categóricas
     cols_categoricas = df.select_dtypes(include=['object', 'category']).columns.tolist()
 
+    if not cols_categoricas:
+        return "No se encontraron columnas categóricas para transformar."
+    
     df_final = df.drop(columns=cols_categoricas) # cojo solo las columnas numéricas
 
-    # Aplicamos one-hot encoding a cada columnas categórica y le devolvemos el nombre original (no funciona con multiclase)
-    for col in cols_categoricas:
-        dummies = pd.get_dummies(df[col], drop_first=True, dtype=int)
-        dummies.columns = [col]
-        
-        # Unimos la columnas a las columnas numéricas de nuestro dataset
-        df_final = pd.concat([df_final, dummies], axis=1)
+    try:
+        # Aplicamos one-hot encoding a cada columnas categórica y le devolvemos el nombre original (no funciona con multiclase)
+        for col in cols_categoricas:
+            dummies = pd.get_dummies(df[col], drop_first=True, dtype=int)
+            dummies.columns = [col]
+            
+            # Unimos la columnas a las columnas numéricas de nuestro dataset
+            df_final = pd.concat([df_final, dummies], axis=1)
+    except Exception as e:
+        return f"Error durante la transformación a variables numéricas: {e}"
 
     # Ruta de destino
-    output_folder = "data/processed_data"
+    output_folder = os.path.join("data", "processed_data")
 
     clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
         
@@ -38,7 +51,10 @@ def aplicar_dummies(filepath: str) -> str:
     path_salida = os.path.join(output_folder, nombre_salida)
 
     # Guardamos
-    df_final.to_csv(path_salida, index=False)
+    try:
+        df_final.to_csv(path_salida, index=False)
+    except Exception as e:
+        return f"Error guardando el archivo procesado: {e}"
     
     # Calcular cuántas columnas nuevas nacieron
     cols_antes = df.shape[1]
