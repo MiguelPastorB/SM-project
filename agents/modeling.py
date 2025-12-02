@@ -22,91 +22,106 @@ load_dotenv()
 @tool
 def entrenar_y_evaluar(filepath: str, aplicar_smote: str = "no") -> str:
 
-    df = pd.read_csv(filepath)
+    try:
+        df = pd.read_csv(filepath)
+    except FileNotFoundError:
+        return f"Error: El archivo '{filepath}' no fue encontrado."
+    except pd.errors.EmptyDataError:
+        return f"Error: El archivo '{filepath}' está vacío."
+    except Exception as e:
+        return f"Error leyendo el archivo: {e}"
 
-    # Seleccionamos la variable objetivo como la última columna del dataset
-    target_col = df.columns[-1]
+    try:
+        # Seleccionamos la variable objetivo como la última columna del dataset
+        target_col = df.columns[-1]
 
-    # Separamos X e y
-    X = df.drop(columns=[target_col]) # target_col es la variable objetivo
-    y = df[target_col]
+        # Separamos X e y
+        X = df.drop(columns=[target_col]) # target_col es la variable objetivo
+        y = df[target_col]
 
-    # Train / Test Split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-    
-    info_proceso = []
-    info_proceso.append(f"**Dimensiones:** Train={X_train.shape[0]}, Test={X_test.shape[0]}")
+        # Train / Test Split
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+        
+        info_proceso = ""
+        info_proceso += f"**Dimensiones:** Train={X_train.shape[0]}, Test={X_test.shape[0]}"
 
-    # Normalizamos los datos
-    scaler = StandardScaler()
-    scaler.fit(X_train)
-    X_train_scaled = scaler.transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+        # Normalizamos los datos
+        scaler = StandardScaler()
+        scaler.fit(X_train)
+        X_train_scaled = scaler.transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
 
-    # Diferenciar entre aplicar smote o no según lo decida el agente director
-    if aplicar_smote.lower() == "si":
-        smote = SMOTE(random_state=42)
-        X_train_final, y_train_final = smote.fit_resample(X_train_scaled, y_train)
-        value_counts_smote = y_train_final.value_counts()
-        value_percentages_smote = y_train_final.value_counts(normalize=True) * 100
-        info_proceso.append(f"SMOTE aplicado:** La distribución de train es:\n" 
-                            f"Frecuencia:{value_counts_smote}\n"
-                            f"Porcentaje:{value_percentages_smote}"
-                            )
-    elif aplicar_smote.lower() == "no":
-        X_train_final, y_train_final = X_train, y_train
-        info_proceso.append(f"SMOTE no aplicado")
+        # Diferenciar entre aplicar smote o no según lo decida el agente director
+        if aplicar_smote.lower() == "si":
+            try:
+                smote = SMOTE(random_state=42)
+                X_train_final, y_train_final = smote.fit_resample(X_train_scaled, y_train)
+                value_counts_smote = y_train_final.value_counts()
+                value_percentages_smote = y_train_final.value_counts(normalize=True) * 100
+                info_proceso += f"SMOTE aplicado:** La distribución de train es:\n" 
+                info_proceso += f"Frecuencia:{value_counts_smote}\n"
+                info_proceso += f"Porcentaje:{value_percentages_smote}"
+            except Exception as e:
+                return f"Error aplicando SMOTE: {e}"
 
-    # Entrenar Modelo Random Forest
-    clf = RandomForestClassifier(n_estimators=100, random_state=42)
-    clf.fit(X_train_final, y_train_final)
+        elif aplicar_smote.lower() == "no":
+            X_train_final, y_train_final = X_train_scaled, y_train
+            info_proceso += f"SMOTE no aplicado"
+        else:
+            return "Parámetro 'aplicar_smote' no reconocido. Usa 'si' o 'no'."
 
-    # Predecir sobre train(para las métricas) y test
-    y_train_pred = clf.predict(X_train_final)
-    y_test_pred = clf.predict(X_test_scaled)
+        # Entrenar Modelo Random Forest
+        clf = RandomForestClassifier(n_estimators=100, random_state=42)
+        clf.fit(X_train_final, y_train_final)
 
-    # Métricas
-    calc_metrics = lambda y_true, y_p: {
-        'Accuracy': accuracy_score(y_true, y_p),
-        'F1-Score': f1_score(y_true, y_p),
-        'Recall': recall_score(y_true, y_p),
-        'Precision': precision_score(y_true, y_p)
-    }
-    metrics_train = calc_metrics(y_train_final, y_train_pred)
-    metrics_test = calc_metrics(y_test, y_test_pred)
+        # Predecir sobre train(para las métricas) y test
+        y_train_pred = clf.predict(X_train_final)
+        y_test_pred = clf.predict(X_test_scaled)
 
-    tabla_comparativa = (
-        f"| Métrica | Train Set | Test Set |\n"
-        f"| :--- | :--- | :--- |\n"
-        f"| **F1-Score** | {metrics_train['F1-Score']:.3f} | {metrics_test['F1-Score']:.3f} |\n"
-        f"| **Recall** | {metrics_train['Recall']:.3f} | {metrics_test['Recall']:.3f} |\n"
-        f"| **Precision** | {metrics_train['Precision']:.3f} | {metrics_test['Precision']:.3f} |\n"
-        f"| **Accuracy** | {metrics_train['Accuracy']:.3f} | {metrics_test['Accuracy']:.3f} |"
-    )
-    
-    # Matriz de Confusión
-    cm = confusion_matrix(y_test, y_test_pred)
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-    plt.title(f'Matriz de Confusión (Target: {target_col})\nSMOTE: {aplicar_smote}')
-    plt.ylabel('Realidad')
-    plt.xlabel('Predicción')
-    
-    # Guardar imagen
-    output_folder = "data/processed_data"
-    clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
-    img_name = f"{clean_name}_confusion_matrix.png"
-    path_img = os.path.join(output_folder, img_name)
-    plt.savefig(path_img)
-    plt.close()
-    
-    return (
-        f"### Rendimiento del Modelo Random Forest\n"
-        f"{chr(10).join(info_proceso)}\n\n"
-        f"### Comparativa Train vs Test (Detección Overfitting)\n"
-        f"{tabla_comparativa}\n\n"
-        f"**Visualización:** `{path_img}`"
-    )
+        # Métricas
+        calc_metrics = lambda y_true, y_p: {
+            'Accuracy': accuracy_score(y_true, y_p),
+            'F1-Score': f1_score(y_true, y_p),
+            'Recall': recall_score(y_true, y_p),
+            'Precision': precision_score(y_true, y_p)
+        }
+        metrics_train = calc_metrics(y_train_final, y_train_pred)
+        metrics_test = calc_metrics(y_test, y_test_pred)
+
+        tabla_comparativa = (
+            f"| Métrica | Train Set | Test Set |\n"
+            f"| :--- | :--- | :--- |\n"
+            f"| **F1-Score** | {metrics_train['F1-Score']:.3f} | {metrics_test['F1-Score']:.3f} |\n"
+            f"| **Recall** | {metrics_train['Recall']:.3f} | {metrics_test['Recall']:.3f} |\n"
+            f"| **Precision** | {metrics_train['Precision']:.3f} | {metrics_test['Precision']:.3f} |\n"
+            f"| **Accuracy** | {metrics_train['Accuracy']:.3f} | {metrics_test['Accuracy']:.3f} |"
+        )
+        
+        # Matriz de Confusión
+        cm = confusion_matrix(y_test, y_test_pred)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.title(f'Matriz de Confusión (Target: {target_col})\nSMOTE: {aplicar_smote}')
+        plt.ylabel('Realidad')
+        plt.xlabel('Predicción')
+        
+        # Guardar imagen
+        output_folder = os.path.join("data", "processed_data")
+        clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
+        img_name = f"{clean_name}_confusion_matrix.png"
+        path_img = os.path.join(output_folder, img_name)
+        plt.savefig(path_img)
+        plt.close()
+        
+        return (
+            f"### Rendimiento del Modelo Random Forest\n"
+            f"{info_proceso}\n\n"
+            f"### Comparativa Train vs Test (Detección Overfitting)\n"
+            f"{tabla_comparativa}\n\n"
+            f"**Visualización:** `{path_img}`"
+        )
+    except Exception as e:
+        return f"Error durante el entrenamiento y evaluación del modelo: {e}"
 
 
 # Agente

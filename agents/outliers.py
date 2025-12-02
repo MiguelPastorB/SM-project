@@ -14,49 +14,68 @@ load_dotenv()
 @tool
 def gestionar_outliers(filepath: str, estrategia: str = "eliminar", columna: str = "all") -> str:
 
-    df = pd.read_csv(filepath)
+    try:
+        df = pd.read_csv(filepath)
+    except FileNotFoundError:
+        return f"Error: El archivo '{filepath}' no fue encontrado."
+    except pd.errors.EmptyDataError:
+        return f"Error: El archivo '{filepath}' está vacío."
+    except Exception as e:
+        return f"Error leyendo el archivo: {e}"
+    
     filas_iniciales = len(df)
+    
+    # Validar estrategia
+    if estrategia.lower() not in ["eliminar", "capping"]:
+        return f"Estrategia '{estrategia}' no soportada. Usa 'eliminar' o 'capping'."
     
     # El agente que dirige dirá qué columnas utilizamos
     if columna == "all": # si utilizamos todas las columnas las guardamos
         # Solo columnas numéricas, el IQR no funciona con texto
         cols_to_check = df.select_dtypes(include=[np.number]).columns.tolist()
+        if not cols_to_check:
+            return "No hay columnas numéricas para analizar outliers."
     elif columna in df.columns: # si utilizamos columnas específicas las guardamos
+        if not pd.api.types.is_numeric_dtype(df[columna]):
+            return f"La columna '{columna}' no es numérica y no puede analizarse con IQR."
         cols_to_check = [columna]
     else:
         return f"Error: La columna '{columna}' no existe en el archivo."
 
     total_outliers_detectados = 0
         
-    # Bucle de detección y corrección (Método IQR)
-    for col_name in cols_to_check:
-        # Calcular cuartiles
-        Q1 = df[col_name].quantile(0.25)
-        Q3 = df[col_name].quantile(0.75)
-        IQR = Q3 - Q1
-        
-        # Definir límites
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        
-        # Máscara de outliers en esta columna
-        mask_outliers = (df[col_name] < lower_bound) | (df[col_name] > upper_bound) # true=outlier / false=no outlier
-        num_outliers = mask_outliers.sum() # suma los true
-        
-        if num_outliers > 0:
-            total_outliers_detectados += num_outliers
+    try:
+        # Bucle de detección y corrección (Método IQR)
+        for col_name in cols_to_check:
+            # Calcular cuartiles
+            Q1 = df[col_name].quantile(0.25)
+            Q3 = df[col_name].quantile(0.75)
+            IQR = Q3 - Q1
             
-            if estrategia.lower() == "eliminar":
-                # Nos quedamos con lo que no es outlier
-                df = df[~mask_outliers] # ~ significa NO, es decir quita los outliers
+            # Definir límites
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
             
-            elif estrategia.lower() == "capping":
-                # Si es > max, se vuelve max. Si es < min, se vuelve min.
-                df.loc[df[col_name] < lower_bound, col_name] = lower_bound
-                df.loc[df[col_name] > upper_bound, col_name] = upper_bound
+            # Máscara de outliers en esta columna
+            mask_outliers = (df[col_name] < lower_bound) | (df[col_name] > upper_bound) # true=outlier / false=no outlier
+            num_outliers = mask_outliers.sum() # suma los true
+            
+            if num_outliers > 0:
+                total_outliers_detectados += num_outliers
+                
+                if estrategia.lower() == "eliminar":
+                    # Nos quedamos con lo que no es outlier
+                    df = df[~mask_outliers] # ~ significa NO, es decir quita los outliers
+                
+                elif estrategia.lower() == "capping":
+                    # Si es > max, se vuelve max. Si es < min, se vuelve min.
+                    df.loc[df[col_name] < lower_bound, col_name] = lower_bound
+                    df.loc[df[col_name] > upper_bound, col_name] = upper_bound
+    except Exception as e:
+        return f"Error durante la gestión de outliers: {e}"
 
     # Guardado de destino
-    output_folder = "data/processed_data"
+    output_folder = os.path.join("data", "processed_data")
 
     clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
     
@@ -64,7 +83,10 @@ def gestionar_outliers(filepath: str, estrategia: str = "eliminar", columna: str
     path_salida = os.path.join(output_folder, nombre_salida)
     
     # Guardar
-    df.to_csv(path_salida, index=False)
+    try:
+        df.to_csv(path_salida, index=False)
+    except Exception as e:
+        return f"Error guardando el archivo procesado: {e}"
     
     # Datos para el reporte
     filas_finales = len(df)

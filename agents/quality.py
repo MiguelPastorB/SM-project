@@ -12,7 +12,16 @@ load_dotenv()
 # Esto es una custom tool que lee los csv y te hace un reporte de valores nulos, duplicados, tipos de datos y muestra una muestra
 @tool
 def inspeccionar_calidad_csv(filepath: str) -> str:
-    df = pd.read_csv(filepath)
+
+    try:
+        df = pd.read_csv(filepath)
+    except FileNotFoundError:
+        return f"Error: El archivo '{filepath}' no fue encontrado."
+    except pd.errors.EmptyDataError:
+        return f"Error: El archivo '{filepath}' está vacío."
+    except Exception as e:
+        return f"Error leyendo el archivo: {e}"
+    
     nombre_archivo = os.path.basename(filepath)
     target_col = df.columns[-1]
 
