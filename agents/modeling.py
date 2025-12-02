@@ -1,5 +1,7 @@
 import pandas as pd
 import os
+import matplotlib
+matplotlib.use('Agg') # esto es para que no de error en entornos sin interfaz gráfica y solo muestre las imágenes guardadas jpg/png
 import matplotlib.pyplot as plt
 import seaborn as sns
 from agno.agent import Agent
@@ -92,8 +94,8 @@ def entrenar_y_evaluar(filepath: str, aplicar_smote: str = "no") -> str:
     
     # Guardar imagen
     output_folder = "data/processed_data"
-    base_name = os.path.basename(filepath).replace(".csv", "")
-    img_name = f"{base_name}_confusion_matrix.png"
+    clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
+    img_name = f"{clean_name}_confusion_matrix.png"
     path_img = os.path.join(output_folder, img_name)
     plt.savefig(path_img)
     plt.close()

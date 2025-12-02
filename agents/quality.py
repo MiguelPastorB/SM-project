@@ -16,31 +16,31 @@ def inspeccionar_calidad_csv(filepath: str) -> str:
     nombre_archivo = os.path.basename(filepath)
     target_col = df.columns[-1]
 
-    lines = []
+    report = ""
 
     # Datos generales
-    lines.append(f"Reporte general: {nombre_archivo}")
-    lines.append(f"\n Dimensiones: {df.shape[0]} filas, {df.shape[1]} columnas")
-    lines.append(f"\n Duplicados: {df.duplicated().sum()} filas")
+    report += f"Reporte general: {nombre_archivo}"
+    report += f"\n Dimensiones: {df.shape[0]} filas, {df.shape[1]} columnas"
+    report += f"\n Duplicados: {df.duplicated().sum()} filas"
     
     # Columnas categóricas o booleanas
     cols_cat = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist() # guardamos el nombre de las columnas categóricas
 
     if len(cols_cat) > 0:
-        lines.append(f"Se detectaron {len(cols_cat)} columnas categóricas.")
+        report += f"Se detectaron {len(cols_cat)} columnas categóricas."
     else:
-        lines.append("Todas las columnas son numéricas.")
+        report += "Todas las columnas son numéricas."
 
     # Balanceo de datos
     value_counts = df[target_col].value_counts()
     value_percentages = df[target_col].value_counts(normalize=True) * 100
-    lines.append(f"La distribución de datos en la variable objetivo {target_col} es:\n"
-                 f"Frecuencia:{value_counts}"
-                 f"Porcentaje:{value_percentages}"
-                 )
+    report += f"La distribución de datos en la variable objetivo {target_col} es:\n"
+    report += f"Frecuencia:{value_counts}"
+    report += f"Porcentaje:{value_percentages}"
+
     
     # Datos por columna
-    lines.append(f"\n Reporte por columna")
+    report += f"\n Reporte por columna"
     for col in df.columns:
         # Datos generales
         nulos = df[col].isnull().sum()
@@ -68,12 +68,9 @@ def inspeccionar_calidad_csv(filepath: str) -> str:
             else:
                 info_outliers = "0"
 
-        lines.append(f"Nombre columna={col} | Tipo de dato={tipo} | Nulos={nulos} ({porcentaje_nulos:.1f}%) | Únicos={uniques} | Outliers={info_outliers}")
+        report += f"Nombre columna={col} | Tipo de dato={tipo} | Nulos={nulos} ({porcentaje_nulos:.1f}%) | Únicos={uniques} | Outliers={info_outliers}"
 
-    lines.append(f"\n 5 primeras filas")
-    lines.append(df.head(5).to_string()) # uso to_string para devolver un texto y luego juntar todo el texto de lines=[] con .join
-
-    return "\n".join(lines)
+    return report
 
 quality_agent = Agent(
     name="Agente de Calidad",

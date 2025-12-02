@@ -22,11 +22,10 @@ def aplicar_imputacion(filepath: str, estrategia: str = "eliminar") -> str:
     output_folder = "data/processed_data"
         
     # Construimos el nuevo nombre
-    base_name = os.path.basename(filepath) # Extrae "Bullying1.csv"
-    file_name_sin_ext = os.path.splitext(base_name)[0] # Extrae "Bullying1"
+    clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
     
     # Nombre final: data/processed_data/Bullying1_no_nulls.csv
-    nombre_salida = f"{file_name_sin_ext}_no_nulls.csv"
+    nombre_salida = f"{clean_name}_no_nulls.csv"
     path_salida = os.path.join(output_folder, nombre_salida)
     
     filas_iniciales = len(df)

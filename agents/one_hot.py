@@ -32,11 +32,7 @@ def aplicar_dummies(filepath: str) -> str:
     # Ruta de destino
     output_folder = "data/processed_data"
 
-    base_name = os.path.basename(filepath)
-    file_name_sin_ext = os.path.splitext(base_name)[0]
-
-    # Quitamos sufijos anteriores para no hacer nombres de csv largos
-    clean_name = file_name_sin_ext.replace("_no_nulls", "").replace("_no_outliers", "") # outliers o nulos suelen ser pasos previos
+    clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
         
     nombre_salida = f"{clean_name}_encoded.csv"
     path_salida = os.path.join(output_folder, nombre_salida)

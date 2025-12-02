@@ -58,10 +58,9 @@ def gestionar_outliers(filepath: str, estrategia: str = "eliminar", columna: str
     # Guardado de destino
     output_folder = "data/processed_data"
 
-    base_name = os.path.basename(filepath)
-    name_clean = os.path.splitext(base_name)[0].replace("_no_nulls", "")
+    clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
     
-    nombre_salida = f"{name_clean}_no_outliers.csv"
+    nombre_salida = f"{clean_name}_no_outliers.csv"
     path_salida = os.path.join(output_folder, nombre_salida)
     
     # Guardar

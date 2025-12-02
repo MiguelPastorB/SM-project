@@ -20,8 +20,12 @@ def main():
 
     archivo_objetivo = "data/raw/Bullying1.csv"
     carpeta_processed = "data/processed_data"
+    carpeta_clean_data = "data/clean_data"
     archivo_actual = archivo_objetivo # la idea de archivo_actual es permitir a los agentes saltarse pasos de preprocesamiento sin crear csv nuevos
 
+    # para no repetir código en los if
+    clean_name = os.path.basename(archivo_objetivo).split("_")[0] if "_" in os.path.basename(archivo_objetivo) else os.path.basename(archivo_objetivo).split(".")[0]
+    
     # Paso 1: reporte general
     prompt_quality_report = f"Hazme un reporte de calidad de datos del archivo {archivo_objetivo}"
     quality_report = ejecutar_con_retry("run", quality_agent, prompt_quality_report) # guardamos el reporte
@@ -41,7 +45,6 @@ def main():
         ejecutar_con_retry("print_response", nan_imputer_agent, prompt_nan)
         
         # Actualizamos el csv
-        clean_name = os.path.basename(archivo_actual).replace(".csv", "").replace("_no_nulls", "").replace("_no_outliers", "").replace("_encoded", "").replace("_scaled", "")
         nuevo = os.path.join(carpeta_processed, f"{clean_name}_no_nulls.csv")
         if os.path.exists(nuevo): # si creamos un nuevo csv actualizamos archivo_actual sino no lo actualizamos
             archivo_actual = nuevo 
@@ -55,7 +58,6 @@ def main():
         ejecutar_con_retry("print_response", outlier_agent, prompt_outlier)
         
         # Actualizamos el csv
-        clean_name = os.path.basename(archivo_actual).replace(".csv", "").replace("_no_nulls", "").replace("_no_outliers", "").replace("_encoded", "").replace("_scaled", "")
         nuevo = os.path.join(carpeta_processed, f"{clean_name}_no_outliers.csv")
         if os.path.exists(nuevo):
             archivo_actual = nuevo
@@ -68,7 +70,6 @@ def main():
     if accion == "get_dummies":
         ejecutar_con_retry("print_response", one_hot_agent, prompt_one_hot)
 
-        clean_name = os.path.basename(archivo_actual).replace(".csv", "").replace("_no_nulls", "").replace("_no_outliers", "").replace("_encoded", "").replace("_scaled", "")
         nuevo = os.path.join(carpeta_processed, f"{clean_name}_encoded.csv")
         if os.path.exists(nuevo):
             archivo_actual = nuevo
@@ -76,10 +77,8 @@ def main():
         print(f"El archivo {archivo_actual} no tiene columnas categóricas.")
 
     # Paso extra: guarda csv en 'data/clean_data'
-    carpeta_clean_data = "data/clean_data"
-    nombre_base = os.path.basename(archivo_actual).replace(".csv", "")
-    nombre_limpio = nombre_base.replace("_no_nulls", "").replace("_no_outliers", "").replace("_encoded", "").replace("_scaled", "")
-    nombre_final = f"{nombre_limpio}_clean.csv"
+    clean_name = os.path.basename(archivo_objetivo).split("_")[0] if "_" in os.path.basename(archivo_objetivo) else os.path.basename(archivo_objetivo).split(".")[0]
+    nombre_final = f"{clean_name}_clean.csv"
     ruta_final_clean = os.path.join(carpeta_clean_data, nombre_final)
     shutil.copy(archivo_actual, ruta_final_clean) # copio el csv a 'data/clean_data'
 
