@@ -1,0 +1,8 @@
+{
+    "quality_report": "Hazme un reporte de calidad de datos del archivo {filename}",
+    "director": "Aquí tienes el reporte técnico:\n{report}\nGenera el JSON de decisiones.",
+    "nan": "Limpia el archivo {filename} con '{action}'",
+    "outliers": "Detecta y gestiona outliers en {filename} con '{action}'",
+    "one_hot": "Aplica transformación numérica (dummies) al archivo {filename}",
+    "modeling": "Divide los datos entre train y test del archivo {filename}. Gestiona el balanceo de datos con use_smote = '{plan}'. Normaliza los datos siempre. Aplica los modelos y reporta los resultados."
+}

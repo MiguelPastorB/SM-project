@@ -4,23 +4,23 @@ from agno.models.google import Gemini
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
-# Cargamos las claves
+# Load environment variables
 load_dotenv()
 
 class DirectorResponse(BaseModel):
-    estrategia_nulos: str = Field(..., description="Estrategia para manejar nulos: 'eliminar', 'knn', 'saltar'")
-    estrategia_outliers: str = Field(..., description="Estrategia para manejar outliers: 'eliminar', 'capping', 'saltar'")
-    estrategia_encoding: str = Field(..., description="Estrategia para encoding: 'get_dummies', 'saltar'")
-    aplicar_smote: str = Field(..., description="Decisión sobre aplicar SMOTE: 'si', 'no'")
+    null_strategy: str = Field(..., description="Estrategia para manejar nulos: 'drop', 'knn', 'skip'")
+    outliers_strategy: str = Field(..., description="Estrategia para manejar outliers: 'drop', 'capping', 'skip'")
+    encoding_strategy: str = Field(..., description="Estrategia para encoding: 'get_dummies', 'skip'")
+    use_smote: str = Field(..., description="Decisión sobre aplicar SMOTE: 'yes', 'no'")
 
 
-# La idea es que el agente director tome todas las decisiones siguiendo la lógica de un científico de datos y hable con el resto de agentes mediante JSON
-# Agente
+# This agent is the Director who makes strategic decisions based on data quality reports
+# Agent
 strategy_agent = Agent(
     name="Agente Director",
     model=Gemini(id="gemini-2.5-flash", api_key= os.environ["GOOGLE_API_KEY"]),
     markdown=True,
-    output_schema=DirectorResponse, # configuramos el esquema de salida para que devuelva JSON
+    output_schema=DirectorResponse, # Using Pydantic model for structured output
     description="Eres el Director de Data Science. Tomas decisiones estratégicas basadas en reportes de calidad.",
     instructions=[
         "Recibirás un reporte de calidad de un dataset y lo mostrarás.",
@@ -28,24 +28,24 @@ strategy_agent = Agent(
         "Debes tomar 5 decisiones basadas en el análisis del reporte.",
         
         "Debes seguir las siguientes estrategias para tomar tu decisión:",
-        "1. ESTRATEGIA_NULOS:",
-        "   - Si nulos < 5%, del total entonces eliges 'eliminar'.",
+        "1. NULL_STRATEGY:",
+        "   - Si nulos < 5%, del total entonces eliges 'drop'.",
         "   - Si nulos >= 5%, entonces eliges 'knn'.",
-        "   - Si no hay nulos entonces eliges 'saltar'.",
+        "   - Si no hay nulos entonces eliges 'skip'.",
         
-        "2. ESTRATEGIA_OUTLIERS:",
+        "2. OUTLIERS_STRATEGY:",
         "   - Si filas totales < 1000 entonces eliges 'capping'.",
-        "   - Si filas totales >= 1000 entonces eliges 'eliminar'.",
-        "   - Si no hay outliers entonces eliges 'saltar'.",
+        "   - Si filas totales >= 1000 entonces eliges 'drop'.",
+        "   - Si no hay outliers entonces eliges 'skip'.",
         
-        "3. ESTRATEGIA_ENCODING:",
+        "3. ENCODING_STRATEGY:",
         "   - Si hay columnas categóricas ('cols_cat') aplica 'get_dummies' a las columnas categóricas.",
-        "   - Si no hay columnas categóricas aplica 'saltar'.",
+        "   - Si no hay columnas categóricas aplica 'skip'.",
 
-        "4. METODO_ESCALADO: siempre aplica normalización de datos con 'standard'",
+        "4. SCALING_METHOD: siempre aplica normalización de datos con 'standard'",
         
-        "5. APLICAR_SMOTE:",
-        "   - Si existe un desbalanceo de datos, entonces eliges 'si'.",
+        "5. USE_SMOTE:",
+        "   - Si existe un desbalanceo de datos, entonces eliges 'yes'.",
         "   - Si los datos están balanceados entonces eliges 'no'."
     ]
 )
