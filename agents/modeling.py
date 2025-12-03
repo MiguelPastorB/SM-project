@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import matplotlib
-matplotlib.use('Agg') # esto es para que no de error en entornos sin interfaz gráfica y solo muestre las imágenes guardadas jpg/png
+matplotlib.use('Agg') # Use a non-interactive backend (for environments without display)
 import matplotlib.pyplot as plt
 import seaborn as sns
 from agno.agent import Agent
@@ -14,14 +14,13 @@ from imblearn.over_sampling import SMOTE
 from sklearn.preprocessing import StandardScaler
 from dotenv import load_dotenv
 
-# Cargamos las claves
+# Load environment variables
 load_dotenv()
 
-# Esta herramienta separa los datos en train y test y si es necesario aplica balanceo de datos. Luego aplica los modelos
-# Guarda el resultado en 'data/processed_data'
-@tool
-def entrenar_y_evaluar(filepath: str, aplicar_smote: str = "no") -> str:
 
+@tool
+def train_and_test_model(filepath: str, use_smote: str = "no") -> str:
+    # Read the CSV file and handle potential errors
     try:
         df = pd.read_csv(filepath)
     except FileNotFoundError:
@@ -31,54 +30,56 @@ def entrenar_y_evaluar(filepath: str, aplicar_smote: str = "no") -> str:
     except Exception as e:
         return f"Error leyendo el archivo: {e}"
 
+    # train-test split, scaling, SMOTE application, model training and evaluation
     try:
-        # Seleccionamos la variable objetivo como la última columna del dataset
+        # We assume the target variable is the last column
         target_col = df.columns[-1]
 
-        # Separamos X e y
-        X = df.drop(columns=[target_col]) # target_col es la variable objetivo
+        # Split features and target
+        X = df.drop(columns=[target_col])
         y = df[target_col]
 
-        # Train / Test Split
+        # Split into train and test sets
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
         
-        info_proceso = ""
-        info_proceso += f"**Dimensiones:** Train={X_train.shape[0]}, Test={X_test.shape[0]}"
+        # Summary of the process
+        process_summary = ""
+        process_summary += f"**Dimensiones:** Train={X_train.shape[0]}, Test={X_test.shape[0]}"
 
-        # Normalizamos los datos
+        # We scale the features
         scaler = StandardScaler()
         scaler.fit(X_train)
         X_train_scaled = scaler.transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        # Diferenciar entre aplicar smote o no según lo decida el agente director
-        if aplicar_smote.lower() == "si":
+        # Apply SMOTE if indicated
+        if use_smote.lower() == "yes":
             try:
                 smote = SMOTE(random_state=42)
                 X_train_final, y_train_final = smote.fit_resample(X_train_scaled, y_train)
                 value_counts_smote = y_train_final.value_counts()
                 value_percentages_smote = y_train_final.value_counts(normalize=True) * 100
-                info_proceso += f"SMOTE aplicado:** La distribución de train es:\n" 
-                info_proceso += f"Frecuencia:{value_counts_smote}\n"
-                info_proceso += f"Porcentaje:{value_percentages_smote}"
+                process_summary += f"SMOTE aplicado:** La distribución de train es:\n" 
+                process_summary += f"Frecuencia:{value_counts_smote}\n"
+                process_summary += f"Porcentaje:{value_percentages_smote}"
             except Exception as e:
                 return f"Error aplicando SMOTE: {e}"
-
-        elif aplicar_smote.lower() == "no":
+        # If not applying SMOTE, use the scaled data as is
+        elif use_smote.lower() == "no":
             X_train_final, y_train_final = X_train_scaled, y_train
-            info_proceso += f"SMOTE no aplicado"
+            process_summary += f"SMOTE no aplicado"
         else:
-            return "Parámetro 'aplicar_smote' no reconocido. Usa 'si' o 'no'."
+            return "Parámetro 'use_smote' no reconocido. Usa 'yes' o 'no'."
 
-        # Entrenar Modelo Random Forest
+        # Train Random Forest Classifier
         clf = RandomForestClassifier(n_estimators=100, random_state=42)
         clf.fit(X_train_final, y_train_final)
 
-        # Predecir sobre train(para las métricas) y test
+        # Predictions
         y_train_pred = clf.predict(X_train_final)
         y_test_pred = clf.predict(X_test_scaled)
 
-        # Métricas
+        # Calculate metrics
         calc_metrics = lambda y_true, y_p: {
             'Accuracy': accuracy_score(y_true, y_p),
             'F1-Score': f1_score(y_true, y_p),
@@ -88,7 +89,8 @@ def entrenar_y_evaluar(filepath: str, aplicar_smote: str = "no") -> str:
         metrics_train = calc_metrics(y_train_final, y_train_pred)
         metrics_test = calc_metrics(y_test, y_test_pred)
 
-        tabla_comparativa = (
+        # Create metrics table
+        metrics_table = (
             f"| Métrica | Train Set | Test Set |\n"
             f"| :--- | :--- | :--- |\n"
             f"| **F1-Score** | {metrics_train['F1-Score']:.3f} | {metrics_test['F1-Score']:.3f} |\n"
@@ -97,16 +99,16 @@ def entrenar_y_evaluar(filepath: str, aplicar_smote: str = "no") -> str:
             f"| **Accuracy** | {metrics_train['Accuracy']:.3f} | {metrics_test['Accuracy']:.3f} |"
         )
         
-        # Matriz de Confusión
+        # Confusion Matrix plot
         cm = confusion_matrix(y_test, y_test_pred)
         plt.figure(figsize=(8, 6))
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-        plt.title(f'Matriz de Confusión (Target: {target_col})\nSMOTE: {aplicar_smote}')
+        plt.title(f'Matriz de Confusión (Target: {target_col})\nSMOTE: {use_smote}')
         plt.ylabel('Realidad')
         plt.xlabel('Predicción')
         
-        # Guardar imagen
-        output_folder = os.path.join("data", "processed_data")
+        # Save the confusion matrix plot
+        output_folder = os.path.join("data", "clean_data")
         clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
         img_name = f"{clean_name}_confusion_matrix.png"
         path_img = os.path.join(output_folder, img_name)
@@ -115,24 +117,25 @@ def entrenar_y_evaluar(filepath: str, aplicar_smote: str = "no") -> str:
         
         return (
             f"### Rendimiento del Modelo Random Forest\n"
-            f"{info_proceso}\n\n"
+            f"{process_summary}\n\n"
             f"### Comparativa Train vs Test (Detección Overfitting)\n"
-            f"{tabla_comparativa}\n\n"
+            f"{metrics_table}\n\n"
             f"**Visualización:** `{path_img}`"
         )
     except Exception as e:
         return f"Error durante el entrenamiento y evaluación del modelo: {e}"
 
 
-# Agente
+# Agent
 modeling_agent = Agent(
     name="Agente Data Scientist",
     model=Gemini(id="gemini-2.5-flash", api_key= os.environ["GOOGLE_API_KEY"]),
-    tools=[entrenar_y_evaluar],
+    tools=[train_and_test_model],
     markdown=True,
     instructions=[
         "Eres un Data Scientist Senior.",
         "Tu objetivo es entrenar y evaluar modelos de machine learning correctamente.",
+        "Tu herramienta principal es 'train_and_test_model'.",
         "Recibe el archivo y la decisión de aplicar balanceo de datos con SMOTE o no aplicar balanceo de datos.",
         "Si aplicas SMOTE indica que los datos están balanceados con los porcentajes de cada clase. ",
         "Genera un análisis de las métricas obtenidas comparando con train y test para ver si hay overfitting y concluyendo si el modelo predice bien o no. "

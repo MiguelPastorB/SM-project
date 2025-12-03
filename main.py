@@ -1,115 +1,118 @@
 import os
 import shutil
+import json
 from agents.quality import quality_agent
 from agents.nan_imputer import nan_imputer_agent
 from agents.outliers import outlier_agent
 from agents.one_hot import one_hot_agent
 from agents.modeling import modeling_agent
 from agents.director import strategy_agent
-from utils.utils import ejecutar_con_retry
-from utils.utils import limpiar_datos_antiguos
+from utils.utils import retry
+from utils.utils import clear_old_data
 from dotenv import load_dotenv
 
-# Cargamos las claves
+# Load environment variables
 load_dotenv()
 
-# Estructura del sistema multiagente
+# Load prompts from JSON file
+PROMPT_PATH = os.path.join(os.path.dirname(__file__), "config", "prompts.json")
+
+with open(PROMPT_PATH, "r", encoding="utf-8") as f:
+    PROMPTS = json.load(f)
+
+# Main execution function
 def main():
-    # Limpiamos datos antiguos
-    limpiar_datos_antiguos()
+    # Remove old processed files
+    clear_old_data()
 
-    # Definimos carpetas
+    # Define main directories
     raw_folder = os.path.join("data", "raw")
-    carpeta_processed = os.path.join("data", "processed_data") 
-    carpeta_clean_data = os.path.join("data", "clean_data")
+    folder_processed = os.path.join("data", "processed_data") 
+    folder_clean_data = os.path.join("data", "clean_data")
 
-    # Definimos rutas y archivos
     try:
-        # 1. Intentamos leer la carpeta
+        # Check if raw data folder exists
         if not os.path.exists(raw_folder):
             raise FileNotFoundError(f"No existe la carpeta {raw_folder}")
-
+        # List files inside raw folder
         files = os.listdir(raw_folder)
         
-        # 2. Si no hay archivos, lanzamos error manual
+        # Stop if no CSV available
         if not files:
             raise Exception("La carpeta está vacía. Por favor añade un .csv")
         
-        # Listamos los archivos en data/raw
+        # Print all found files for visibility
         for file in files:
             print(file)
-        archivo_objetivo = files[0]  # tomamos el primer archivo encontrado y devuelve "Bullying1.csv"
-        archivo_actual = os.path.join(raw_folder, archivo_objetivo)
-        print(f"\n Cogiendo el primer archivo: '{archivo_objetivo}'")
+        target_file = files[0]
+        current_file = os.path.join(raw_folder, target_file)
+        print(f"\n Cogiendo el primer archivo: '{target_file}'")
     except Exception as e:
-        # Si pasa CUALQUIER cosa mala (no carpeta, vacía, error de permisos...)
+        # Critical error: stop execution
         print(f"\n Error crítico seleccionando archivo: {e}")
         print("\n Deteniendo ejecución.")
-        return # Cortamos el programa aquí
+        return
     
-    # para no repetir código en los if
-    clean_name = os.path.basename(archivo_objetivo).split("_")[0] if "_" in os.path.basename(archivo_objetivo) else os.path.basename(archivo_objetivo).split(".")[0]
+    # Extract clean base name without prefix or file extension
+    clean_name = os.path.basename(target_file).split("_")[0] if "_" in os.path.basename(target_file) else os.path.basename(target_file).split(".")[0]
     
-    # Paso 1: reporte general
-    prompt_quality_report = f"Hazme un reporte de calidad de datos del archivo {archivo_actual}"
-    quality_report = ejecutar_con_retry("run", quality_agent, prompt_quality_report) # guardamos el reporte
+    # Step 1: Data Quality Report
+    prompt_quality_report = PROMPTS["quality_report"].format(filename=current_file)
+    quality_report = retry("run", quality_agent, prompt_quality_report) # Get quality report
+    text_report = quality_report.content # Extract text content
+    print(text_report)
 
-    reporte_texto = quality_report.content # guardamos solo el texto del reporte
-    print(reporte_texto) # mostramos el reporte
+    # Step 2: Strategy Planning
+    prompt_director = PROMPTS["director"].format(report=text_report)
+    report_director = retry("run", strategy_agent, prompt_director) # Get strategy plan
+    plan = dict(report_director.content) # Convert to dictionary
 
-    # Informamos al agente director
-    prompt_director = f"Aquí tienes el reporte técnico:\n{reporte_texto}\nGenera el JSON de decisiones."
-    reporte_director = ejecutar_con_retry("run", strategy_agent, prompt_director) # enviamos el reporte al agente director
-    plan = dict(reporte_director.content) # obtenemos el diccionario directamente del esquema
-
-    # Paso 2: valores nulos
-    accion = plan.get("estrategia_nulos", "saltar")
-    prompt_nan = f"Limpia el archivo {archivo_actual} con '{accion}'"
-    if accion != "saltar":
-        ejecutar_con_retry("print_response", nan_imputer_agent, prompt_nan)
-        
-        # Actualizamos el csv
-        nuevo = os.path.join(carpeta_processed, f"{clean_name}_no_nulls.csv")
-        if os.path.exists(nuevo): # si creamos un nuevo csv actualizamos archivo_actual sino no lo actualizamos
-            archivo_actual = nuevo 
+    # Step 3: Null Value Handling
+    action = plan.get("null_strategy", "skip")
+    prompt_nan = PROMPTS["nan"].format(filename=current_file, action=action)
+    if action != "skip":
+        retry("print_response", nan_imputer_agent, prompt_nan) # Execute imputation
+        # Update dataset path if new file was created
+        new = os.path.join(folder_processed, f"{clean_name}_no_nulls.csv")
+        if os.path.exists(new):
+            current_file = new 
     else:
-        print(f"El archivo {archivo_actual} no tiene valores nulos.")
+        print(f"El archivo {current_file} no tiene valores nulos.")
 
-    # Paso 3: outliers
-    accion = plan.get("estrategia_outliers", "saltar")
-    prompt_outlier = f"Detecta y gestiona outliers en {archivo_actual} con '{accion}'"
-    if accion != "saltar":
-        ejecutar_con_retry("print_response", outlier_agent, prompt_outlier)
-        
-        # Actualizamos el csv
-        nuevo = os.path.join(carpeta_processed, f"{clean_name}_no_outliers.csv")
-        if os.path.exists(nuevo):
-            archivo_actual = nuevo
+    # Step 4: Outlier Handling
+    action = plan.get("outliers_strategy", "skip")
+    prompt_outlier = PROMPTS["outliers"].format(filename=current_file, action=action)
+    if action != "skip":
+        retry("print_response", outlier_agent, prompt_outlier) # Execute outlier handling
+        # Update dataset path if new file was created
+        new = os.path.join(folder_processed, f"{clean_name}_no_outliers.csv")
+        if os.path.exists(new):
+            current_file = new
     else:
-        print(f"El archivo {archivo_actual} no tiene outliers.")
+        print(f"El archivo {current_file} no tiene outliers.")
 
-    # Paso 4: One-hot encoding
-    accion = plan.get("estrategia_encoding", "saltar")
-    prompt_one_hot = f"Aplica transformación numérica (dummies) al archivo {archivo_actual}"
-    if accion == "get_dummies":
-        ejecutar_con_retry("print_response", one_hot_agent, prompt_one_hot)
-
-        nuevo = os.path.join(carpeta_processed, f"{clean_name}_encoded.csv")
-        if os.path.exists(nuevo):
-            archivo_actual = nuevo
+    # Step 5: One-Hot Encoding for Categorical Variables
+    action = plan.get("encoding_strategy", "skip")
+    prompt_one_hot = PROMPTS["one_hot"].format(filename=current_file)
+    if action == "get_dummies":
+        retry("print_response", one_hot_agent, prompt_one_hot) # Execute one-hot encoding
+        # Update dataset path if new file was created
+        new = os.path.join(folder_processed, f"{clean_name}_encoded.csv")
+        if os.path.exists(new):
+            current_file = new
     else:
-        print(f"El archivo {archivo_actual} no tiene columnas categóricas.")
+        print(f"El archivo {current_file} no tiene columnas categóricas.")
 
-    # Paso extra: guarda csv en 'data/clean_data'
-    nombre_final = f"{clean_name}_clean.csv"
-    ruta_final_clean = os.path.join(carpeta_clean_data, nombre_final)
-    shutil.copy(archivo_actual, ruta_final_clean) # copio el csv a 'data/clean_data'
+    # Step 6: Final Clean Data Copy
+    final_name = f"{clean_name}_clean.csv"
+    path_final_clean = os.path.join(folder_clean_data, final_name)
+    shutil.copy(current_file, path_final_clean) # Copy final cleaned file
 
-    # Paso 5: Balanceo de datos, normalización y modelos
-    smote = plan.get("aplicar_smote", "no")
-    prompt_modeling = f"Divide los datos entre train y test del archivo {archivo_actual}. Gestiona el balanceo de datos con aplicar_smote = '{smote}'. Normaliza los datos siempre. Aplica los modelos y reporta los resultados."
+    # Step 7: Modeling
+    smote = plan.get("use_smote", "no") # Check SMOTE decision
+    prompt_modeling = PROMPTS["modeling"].format(filename=current_file, plan=smote)
 
-    ejecutar_con_retry("print_response", modeling_agent, prompt_modeling)
+    retry("print_response", modeling_agent, prompt_modeling) # Run modeling agent
 
 if __name__ == "__main__":
     main()

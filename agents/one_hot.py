@@ -5,15 +5,13 @@ from agno.models.google import Gemini
 from agno.tools import tool
 from dotenv import load_dotenv
 
-# Cargamos las claves
+# Load environment variables
 load_dotenv()
 
-# Creamos la herramienta que aplica One-hot encoding (dummies)
-# bool = True quita una de las 2 columnas booleanas creadas por One-hot encoding
-# Guarda el resultado en 'data/processed_data'
-@tool
-def aplicar_dummies(filepath: str) -> str:
 
+@tool
+def apply_dummies(filepath: str) -> str:
+    # Read the CSV file and handle potential errors
     try:
         df = pd.read_csv(filepath)
     except FileNotFoundError:
@@ -23,62 +21,58 @@ def aplicar_dummies(filepath: str) -> str:
     except Exception as e:
         return f"Error leyendo el archivo: {e}"
     
-    # Identificar columnas categóricas
-    cols_categoricas = df.select_dtypes(include=['object', 'category']).columns.tolist()
-
-    if not cols_categoricas:
+    # Identify categorical columns
+    cols_cat = df.select_dtypes(include=['object', 'category']).columns.tolist()
+    if not cols_cat:
         return "No se encontraron columnas categóricas para transformar."
-    
-    df_final = df.drop(columns=cols_categoricas) # cojo solo las columnas numéricas
+    # Initialize final DataFrame without categorical columns
+    df_final = df.drop(columns=cols_cat)
 
+    # Apply one-hot encoding
     try:
-        # Aplicamos one-hot encoding a cada columnas categórica y le devolvemos el nombre original (no funciona con multiclase)
-        for col in cols_categoricas:
+        # Create dummies for each categorical column and concatenate to final DataFrame
+        for col in cols_cat:
             dummies = pd.get_dummies(df[col], drop_first=True, dtype=int)
             dummies.columns = [col]
-            
-            # Unimos la columnas a las columnas numéricas de nuestro dataset
             df_final = pd.concat([df_final, dummies], axis=1)
     except Exception as e:
         return f"Error durante la transformación a variables numéricas: {e}"
 
-    # Ruta de destino
+    # Define output folder and path
     output_folder = os.path.join("data", "processed_data")
-
     clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
-        
-    nombre_salida = f"{clean_name}_encoded.csv"
-    path_salida = os.path.join(output_folder, nombre_salida)
+    output_name = f"{clean_name}_encoded.csv"
+    output_path = os.path.join(output_folder, output_name)
 
-    # Guardamos
+    # Save the final DataFrame
     try:
-        df_final.to_csv(path_salida, index=False)
+        df_final.to_csv(output_path, index=False)
     except Exception as e:
         return f"Error guardando el archivo procesado: {e}"
     
-    # Calcular cuántas columnas nuevas nacieron
-    cols_antes = df.shape[1]
-    cols_despues = df_final.shape[1]
-    nuevas_cols = cols_despues - cols_antes
+    # Report on dimension changes
+    cols_before = df.shape[1]
+    cols_after = df_final.shape[1]
+    new_cols = cols_after - cols_before
 
     return (
         f"### Transformación a datos numérico (dummies) completada\n"
-        f"- **Columnas originales:** {cols_antes}\n"
-        f"- **Columnas finales:** {cols_despues} (Crecimiento: +{nuevas_cols})\n"
-        f"- **Variables transformadas:** {cols_categoricas}\n"
-        f"- **Archivo guardado en:** `{path_salida}`"
+        f"- **Columnas originales:** {cols_before}\n"
+        f"- **Columnas finales:** {cols_after} (Crecimiento: +{new_cols})\n"
+        f"- **Variables transformadas:** {cols_cat}\n"
+        f"- **Archivo guardado en:** `{output_path}`"
     )
 
 
-# Agente
+# Agent
 one_hot_agent = Agent(
     name="Agente de One-hot Encoding",
     model=Gemini(id="gemini-2.5-flash", api_key= os.environ["GOOGLE_API_KEY"]),
-    tools=[aplicar_dummies],
+    tools=[apply_dummies],
     markdown=True,
     instructions=[
         "Eres un ingeniero de datos experto en preprocesamiento.",
         "Tu objetivo es preparar los datos para que sean 100% numéricos.",
-        "Recibe un archivo, aplica 'aplicar_dummies' y reporta el cambio de dimensiones y los resultados."
+        "Recibe un archivo, aplica 'apply_dummies' y reporta el cambio de dimensiones y los resultados."
     ]
 )

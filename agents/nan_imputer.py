@@ -7,15 +7,13 @@ from agno.tools import tool
 import os
 from dotenv import load_dotenv
 
-# Cargamos las claves
+# Load environment variables
 load_dotenv()
 
-# Creamos una herramienta personalizada donde aplicamos técnicas de limpieza de valores nulos (NaN) sobre un archivo CSV
-# y guardamos el resultado en 'data/processed_data'. El agente principal elegirá si eliminar o rellenar datos y también
-# elegirá el valor de k para aplicar KNN.
+# This tool applies missing value imputation strategies to a CSV file
 @tool
-def aplicar_imputacion(filepath: str, estrategia: str = "eliminar") -> str:
-
+def manage_nulls(filepath: str, strategy: str = "drop") -> str:
+    # Read the CSV file and handle potential errors
     try:
         df = pd.read_csv(filepath)
     except FileNotFoundError:
@@ -25,76 +23,63 @@ def aplicar_imputacion(filepath: str, estrategia: str = "eliminar") -> str:
     except Exception as e:
         return f"Error leyendo el archivo: {e}"
     
-    # Definimos la carpeta de destino
+    # Define output folder
     output_folder = os.path.join("data", "processed_data")
-        
-    # Construimos el nuevo nombre
+    # Extract clean name for output file and path
     clean_name = os.path.basename(filepath).split("_")[0] if "_" in os.path.basename(filepath) else os.path.basename(filepath).split(".")[0]
-    
-    # Nombre final: data/processed_data/Bullying1_no_nulls.csv
-    nombre_salida = f"{clean_name}_no_nulls.csv"
-    path_salida = os.path.join(output_folder, nombre_salida)
-    
-    filas_iniciales = len(df)
+    output_filename = f"{clean_name}_no_nulls.csv"
+    destination_path = os.path.join(output_folder, output_filename)
+    # Store initial number of rows for reporting
+    initial_rows = len(df)
         
     try:
-        # Estrategia de limpieza
-        if estrategia.lower() == "eliminar":
-            df_clean = df.dropna()
-            filas_borradas = filas_iniciales - len(df_clean)
-            
-            # Guardamos en la nueva ruta
-            df_clean.to_csv(path_salida, index=False)
-            
-            if filas_borradas == 0:
-                return f"Sin nulos. Copia guardada en: {path_salida}"
-            return f"Se eliminaron {filas_borradas} filas. Dataset limpio en: {path_salida}"
+        # Apply the selected strategy
+        if strategy.lower() == "drop":
+            df_clean = df.dropna() # Drop rows with any null values
+            deleted_rows = initial_rows - len(df_clean)
+            df_clean.to_csv(destination_path, index=False) # Save cleaned DataFrame
+            if deleted_rows == 0: # If no rows were deleted, inform accordingly
+                return f"Sin nulos. Copia guardada en: {destination_path}"
+            return f"Se eliminaron {deleted_rows} filas. Dataset limpio en: {destination_path}"
 
-        # Estrategia de rellenar datos con KNN   
-        elif estrategia.lower() == "knn":
-            df_numeric = df.select_dtypes(include=[np.number]) # columnas numéricas para KNN
-            df_categorical = df.select_dtypes(exclude=[np.number]) # columnas categóricas
-            
-            if df_numeric.empty:
+        elif strategy.lower() == "knn":
+            df_numeric = df.select_dtypes(include=[np.number]) # Select only numeric columns
+            df_categorical = df.select_dtypes(exclude=[np.number]) # Select non-numeric columns
+            if df_numeric.empty: # Check if there are numeric columns to impute
                 return "No hay columnas numéricas para aplicar KNN."
-
-            imputer = KNNImputer(n_neighbors=5) # instanciamos el imputador
-            matriz_imputada = imputer.fit_transform(df_numeric) # ejecutamos todo el proceso y devuelve una matriz
-            
-            df_numeric_imputed = pd.DataFrame( # transformamos la matriz en un dataframe de nuevo y volvemos a poner los índices y columnas previos
-                matriz_imputada, columns=df_numeric.columns, index=df_numeric.index
-            )
-            
-            df_final = pd.concat([df_numeric_imputed, df_categorical], axis=1) # volvemos a juntar todas las columnas
-            
-            # Comprobamos que no quedan nulos
-            total_nulos_restantes = df_final.isnull().sum()
-
-            # Guardamos en la nueva ruta
+            # Apply KNN Imputer
+            imputer = KNNImputer(n_neighbors=5)
+            imputed_matrix = imputer.fit_transform(df_numeric)
+            df_numeric_imputed = pd.DataFrame(imputed_matrix, columns=df_numeric.columns, index=df_numeric.index)
+            df_final = pd.concat([df_numeric_imputed, df_categorical], axis=1) # Combine numeric and categorical data
+            # We check if any nulls remain
+            total_nulls_remaining = df_final.isnull().sum()
+            # Save the final DataFrame
             try:
-                df_final.to_csv(path_salida, index=False)
+                df_final.to_csv(destination_path, index=False)
             except Exception as e:
                 return f"Error guardando el archivo procesado: {e}"
-            
-            if total_nulos_restantes.sum() == 0:
-                return f"Imputación KNN realizada exitosamente. No quedan nulos.\nArchivo guardado en: {path_salida}"
+            # Report on remaining nulls
+            if total_nulls_remaining.sum() == 0:
+                return f"Imputación KNN realizada exitosamente. No quedan nulos.\nArchivo guardado en: {destination_path}"
             else:
-                return (f"Imputación KNN realizada pero quedan {total_nulos_restantes} valores nulos.\n"
-                        f"Archivo guardado en: {path_salida}")
+                return (f"Imputación KNN realizada pero quedan {total_nulls_remaining} valores nulos.\n"
+                        f"Archivo guardado en: {destination_path}")
         else:
-            return ("Estrategia no reconocida. Usa 'eliminar' o 'knn'.")
+            return ("Estrategia no reconocida. Usa 'drop' o 'knn'.")
     except Exception as e:
         return f"Error durante la imputación: {e}"
         
 
-# Agente
+# Agent
 nan_imputer_agent = Agent(
     name="Agente de Imputación",
     model=Gemini(id="gemini-2.5-flash", api_key= os.environ["GOOGLE_API_KEY"]),
-    tools=[aplicar_imputacion],
+    tools=[manage_nulls],
     markdown=True,
     instructions=[
         "Recibes un archivo.",
+        "Tu herramienta principal es 'manage_nulls'.",
         "Aplicas la estrategia de limpieza indicada.",
         "Informas que el resultado se ha guardado en 'data/processed_data'."
         "Reporta el cambio de dimensiones y resultados."
